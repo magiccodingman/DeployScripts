@@ -174,7 +174,7 @@ run_guest 'cd /home/ci/DeployScripts && sudo bash debian/secure-storage/setup.sh
 
 printf 'Checking encrypted runtime locations before reboot...\n'
 run_guest "sudo docker info --format '{{.DockerRootDir}}' | grep -Fx '/srv/secure/docker'"
-run_guest "sudo containerd config dump | awk -F'\"' '/^root[[:space:]]*=/{print \$2; exit}' | grep -Fx '/srv/secure/containerd'"
+run_guest "cd /home/ci/DeployScripts && sudo bash -c 'source debian/secure-storage/lib/docker.sh; containerd config dump | containerd_root_from_toml' | grep -Fx '/srv/secure/containerd'"
 run_guest "grep -Fq '/srv/secure/swapfile' /proc/swaps"
 run_guest "printf 'secure-storage-ci\\n' | sudo tee /srv/secure/ci-persistence-marker >/dev/null"
 
@@ -194,7 +194,7 @@ done
 run_guest 'test -f /srv/secure/ci-persistence-marker'
 run_guest "grep -Fq '/srv/secure/swapfile' /proc/swaps"
 run_guest "sudo docker info --format '{{.DockerRootDir}}' | grep -Fx '/srv/secure/docker'"
-run_guest "sudo containerd config dump | awk -F'\"' '/^root[[:space:]]*=/{print \$2; exit}' | grep -Fx '/srv/secure/containerd'"
+run_guest "cd /home/ci/DeployScripts && sudo bash -c 'source debian/secure-storage/lib/docker.sh; containerd config dump | containerd_root_from_toml' | grep -Fx '/srv/secure/containerd'"
 run_guest 'cd /home/ci/DeployScripts && sudo bash debian/secure-storage/setup.sh --name ci-secure --mount /srv/secure --swap 512M --docker --check'
 
 printf 'Secure-storage Debian 13 VM integration: PASS\n'
