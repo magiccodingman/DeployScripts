@@ -36,11 +36,20 @@ jobs:
           openssl version
           docker compose version
 
-      - name: Compile renderer
-        run: python3 -m py_compile debian/harbor/lib/render_config.py
+      - name: Compile Python helpers
+        run: |
+          python3 -m py_compile debian/harbor/lib/render_config.py
+          python3 -m py_compile debian/harbor/lib/s3_probe.py
+          python3 -m py_compile tests/harbor/s3-probe-http-shape.py
 
       - name: Config renderer regression
         run: bash tests/harbor/config-render.sh
+
+      - name: S3 probe request-shape regression
+        run: |
+          python3 -m venv /tmp/deployscripts-harbor-boto
+          /tmp/deployscripts-harbor-boto/bin/pip install --disable-pip-version-check --quiet 'boto3==1.37.9'
+          /tmp/deployscripts-harbor-boto/bin/python tests/harbor/s3-probe-http-shape.py
 
       - name: Official Harbor prepare integration
         env:
