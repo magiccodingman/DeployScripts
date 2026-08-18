@@ -6,6 +6,7 @@ WORK_DIR=$(mktemp -d)
 SSH_PORT=2222
 VM_PID=""
 DEBIAN_IMAGE_URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
+DEBIAN_IMAGE_CACHE=${DEPLOYSCRIPTS_DEBIAN_IMAGE_CACHE:-"${HOME}/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2"}
 SSH_KEY="${WORK_DIR}/id_ed25519"
 SSH_OPTS=(
   -i "$SSH_KEY"
@@ -105,11 +106,19 @@ sudo apt-get install -y --no-install-recommends \
   openssh-client \
   curl
 
-printf 'Downloading Debian 13 generic cloud image...\n'
-curl --fail --location --retry 5 --retry-delay 2 \
-  --output "${WORK_DIR}/debian-base.qcow2" \
-  "$DEBIAN_IMAGE_URL"
+if [[ -s $DEBIAN_IMAGE_CACHE ]]; then
+  printf 'Using cached Debian 13 generic cloud image: %s\n' "$DEBIAN_IMAGE_CACHE"
+else
+  printf 'Downloading Debian 13 generic cloud image...\n'
+  install -d -m 0755 "$(dirname "$DEBIAN_IMAGE_CACHE")"
+  cache_tmp="${DEBIAN_IMAGE_CACHE}.tmp.$$"
+  curl --fail --location --retry 5 --retry-delay 2 \
+    --output "$cache_tmp" \
+    "$DEBIAN_IMAGE_URL"
+  mv "$cache_tmp" "$DEBIAN_IMAGE_CACHE"
+fi
 
+cp --reflink=auto "$DEBIAN_IMAGE_CACHE" "${WORK_DIR}/debian-base.qcow2"
 cp --reflink=auto "${WORK_DIR}/debian-base.qcow2" "${WORK_DIR}/debian-ci.qcow2"
 qemu-img resize "${WORK_DIR}/debian-ci.qcow2" 20G
 
