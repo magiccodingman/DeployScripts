@@ -25,15 +25,22 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Cache Debian 13 cloud image
-        uses: actions/cache@v5
+      - name: Restore Debian 13 cloud image cache
+        id: debian-image-cache
+        uses: actions/cache/restore@v5
         with:
           path: ~/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2
           key: debian-13-genericcloud-amd64-${{ hashFiles('tests/secure-storage/debian-cloud-image-cache-version.txt') }}
-          save-always: true
 
       - name: Run integration harness
         env:
           DEPLOYSCRIPTS_CI: "1"
           DEPLOYSCRIPTS_DEBIAN_IMAGE_CACHE: /home/runner/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2
         run: bash "${{ inputs.test-script }}"
+
+      - name: Save Debian 13 cloud image cache
+        if: ${{ always() && steps.debian-image-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2
+          key: debian-13-genericcloud-amd64-${{ hashFiles('tests/secure-storage/debian-cloud-image-cache-version.txt') }}
