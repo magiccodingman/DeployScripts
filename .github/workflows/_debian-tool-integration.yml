@@ -26,10 +26,11 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Cache Debian 13 cloud image
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2
           key: debian-13-genericcloud-amd64-${{ hashFiles('tests/secure-storage/debian-cloud-image-cache-version.txt') }}
+          save-always: true
 
       - name: Run integration harness
         env:
