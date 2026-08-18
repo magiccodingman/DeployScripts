@@ -4,7 +4,8 @@ set -Eeuo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 VERSION=${HARBOR_TEST_VERSION:-2.15.2}
 WORK=$(mktemp -d)
-trap 'rm -rf "$WORK"' EXIT
+cleanup() { sudo rm -rf "$WORK"; }
+trap cleanup EXIT
 
 archive="$WORK/harbor-online-installer.tgz"
 url="https://github.com/goharbor/harbor/releases/download/v${VERSION}/harbor-online-installer-v${VERSION}.tgz"
@@ -47,16 +48,16 @@ printf 'Running Harbor official prepare...\n'
 (
   cd "$WORK/harbor"
   ./prepare
-  docker compose -f docker-compose.yml config >/dev/null
+  sudo docker compose -f docker-compose.yml config >/dev/null
 )
 
-services=$(docker compose -f "$WORK/harbor/docker-compose.yml" config --services)
+services=$(sudo docker compose -f "$WORK/harbor/docker-compose.yml" config --services)
 if grep -Eq '^(database|postgresql)$' <<<"$services"; then
   printf 'FAIL: local PostgreSQL service exists despite external_database configuration\n' >&2
   exit 1
 fi
 
-python3 - "$WORK/harbor/common/config/registry/config.yml" "$WORK/harbor/harbor.yml" <<'PY'
+sudo python3 - "$WORK/harbor/common/config/registry/config.yml" "$WORK/harbor/harbor.yml" <<'PY'
 import sys, yaml
 with open(sys.argv[1], encoding='utf-8') as fh:
     registry = yaml.safe_load(fh)
