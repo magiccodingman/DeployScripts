@@ -23,9 +23,18 @@ require_root() {
 
 ensure_debian() {
   [[ -r /etc/os-release ]] || die "Cannot identify operating system."
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  [[ ${ID:-} == "debian" ]] || die "This tool currently supports Debian only (detected: ${ID:-unknown})."
+
+  # Read os-release in a subshell so fields such as NAME cannot overwrite
+  # global provisioning state (for example, the LUKS mapper NAME).
+  local detected_id
+  detected_id=$(
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    printf '%s' "${ID:-}"
+  )
+
+  [[ $detected_id == "debian" ]] ||
+    die "This tool currently supports Debian only (detected: ${detected_id:-unknown})."
 }
 
 ensure_absolute_path() {
