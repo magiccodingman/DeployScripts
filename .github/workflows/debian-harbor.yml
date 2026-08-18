@@ -1,0 +1,48 @@
+name: Debian Harbor
+
+on:
+  pull_request:
+    paths:
+      - 'debian/harbor/**'
+      - 'tests/harbor/**'
+      - '.github/workflows/debian-harbor.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'debian/harbor/**'
+      - 'tests/harbor/**'
+      - '.github/workflows/debian-harbor.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harbor:
+    name: Harbor config and official prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Verify runner dependencies
+        run: |
+          python3 -c 'import yaml'
+          openssl version
+          docker compose version
+
+      - name: Compile renderer
+        run: python3 -m py_compile debian/harbor/lib/render_config.py
+
+      - name: Config renderer regression
+        run: bash tests/harbor/config-render.sh
+
+      - name: Official Harbor prepare integration
+        env:
+          HARBOR_TEST_VERSION: '2.15.2'
+        run: bash tests/harbor/prepare-integration.sh
