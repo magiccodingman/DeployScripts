@@ -104,6 +104,13 @@ cloud-localds "${WORK_DIR}/seed.img" \
   "${WORK_DIR}/user-data" \
   "${WORK_DIR}/meta-data"
 
+# GitHub-hosted Linux runners may expose /dev/kvm without granting the runner
+# account direct access. Use KVM when available; otherwise QEMU safely falls
+# back to software emulation.
+if [[ -e /dev/kvm ]]; then
+  sudo chmod 0666 /dev/kvm || true
+fi
+
 ACCEL=tcg
 if [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]; then
   ACCEL=kvm
