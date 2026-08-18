@@ -4,6 +4,7 @@ set -Eeuo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 WORK_DIR=$(mktemp -d)
 SSH_PORT=2222
+SSH_WAIT_ATTEMPTS=75
 VM_PID=""
 DEBIAN_IMAGE_URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
 DEBIAN_IMAGE_CACHE=${DEPLOYSCRIPTS_DEBIAN_IMAGE_CACHE:-"${HOME}/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2"}
@@ -38,13 +39,22 @@ cleanup() {
 trap cleanup EXIT
 
 show_vm_diagnostics() {
+  printf '\n--- QEMU process log (tail) ---\n' >&2
+  tail -n 150 "${WORK_DIR}/qemu.log" 2>/dev/null >&2 || true
+  printf '%s\n' '--- end QEMU process log ---' >&2
   printf '\n--- VM serial console (tail) ---\n' >&2
-  tail -n 250 "${WORK_DIR}/serial.log" 2>/dev/null >&2 || true
+  tail -n 300 "${WORK_DIR}/serial.log" 2>/dev/null >&2 || true
   printf '%s\n' '--- end VM serial console ---' >&2
 }
 
 wait_for_ssh() {
-  for _ in $(seq 1 180); do
+  for _ in $(seq 1 "$SSH_WAIT_ATTEMPTS"); do
+    if [[ -n $VM_PID ]] && ! kill -0 "$VM_PID" 2>/dev/null; then
+      show_vm_diagnostics
+      printf 'Debian VM process exited before SSH became available.\n' >&2
+      return 1
+    fi
+
     if ssh "${SSH_OPTS[@]}" ci@127.0.0.1 true >/dev/null 2>&1; then
       return 0
     fi
@@ -77,6 +87,8 @@ wait_for_vm_exit() {
 
 start_vm() {
   : > "${WORK_DIR}/serial.log"
+  : > "${WORK_DIR}/qemu.log"
+
   qemu-system-x86_64 \
     -accel "$ACCEL" \
     -m 3072 \
@@ -86,10 +98,16 @@ start_vm() {
     -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22" \
     -display none \
     -serial "file:${WORK_DIR}/serial.log" \
-    -daemonize \
-    -pidfile "${WORK_DIR}/qemu.pid"
+    >"${WORK_DIR}/qemu.log" 2>&1 &
 
-  VM_PID=$(cat "${WORK_DIR}/qemu.pid")
+  VM_PID=$!
+  sleep 1
+  if ! kill -0 "$VM_PID" 2>/dev/null; then
+    show_vm_diagnostics
+    printf 'QEMU exited immediately after launch.\n' >&2
+    return 1
+  fi
+
   wait_for_ssh
 }
 
@@ -206,6 +224,9 @@ run_guest 'cd /home/ci/DeployScripts && sudo bash debian/secure-storage/setup.sh
 
 printf 'Rerunning provisioning non-interactively to prove idempotency...\n'
 run_guest 'cd /home/ci/DeployScripts && sudo bash debian/secure-storage/setup.sh --name ci-secure --mount /srv/secure --swap 512M --docker --non-interactive'
+
+printf 'Enabling serial-console diagnostics for the cold boot...\n'
+run_guest "sudo install -d -m 0755 /etc/default/grub.d && printf '%s\\n' 'GRUB_CMDLINE_LINUX=\"\$GRUB_CMDLINE_LINUX console=tty0 console=ttyS0,115200n8\"' | sudo tee /etc/default/grub.d/99-deployscripts-ci-serial.cfg >/dev/null && sudo update-grub >/dev/null && sudo systemctl enable serial-getty@ttyS0.service >/dev/null"
 
 printf 'Checking encrypted runtime locations before cold boot...\n'
 run_guest "sudo docker info --format '{{.DockerRootDir}}' | grep -Fx '/srv/secure/docker'"
