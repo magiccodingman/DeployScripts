@@ -112,11 +112,12 @@ validate_secure_storage() {
 
     if [[ -s /etc/containerd/config.toml ]]; then
       local containerd_root
-      containerd_root=$(awk -F'"' '/^root[[:space:]]*=/ {print $2; exit}' /etc/containerd/config.toml)
+      containerd_root=$(containerd_root_from_toml < /etc/containerd/config.toml)
+      containerd_root=${containerd_root:-/var/lib/containerd}
       if [[ $containerd_root == "${MOUNT_PATH}/containerd" ]]; then
         check_pass "containerd persistent root targets encrypted storage."
       else
-        check_fail "containerd root is '${containerd_root:-unset}', expected ${MOUNT_PATH}/containerd."
+        check_fail "containerd root is '${containerd_root}', expected ${MOUNT_PATH}/containerd."
       fi
     else
       check_fail "containerd configuration is missing."
@@ -145,7 +146,13 @@ validate_secure_storage() {
     fi
 
     if systemctl is-active --quiet containerd.service; then
-      check_pass "containerd service is active."
+      local active_containerd_root
+      active_containerd_root=$(containerd config dump 2>/dev/null | containerd_root_from_toml)
+      if [[ $active_containerd_root == "${MOUNT_PATH}/containerd" ]]; then
+        check_pass "Running containerd uses encrypted persistent root."
+      else
+        check_fail "Running containerd uses '${active_containerd_root:-unknown}'."
+      fi
     else
       check_fail "containerd service is not active."
     fi
