@@ -98,7 +98,7 @@ Secrets (never accepted as CLI arguments):
 
 Modes:
   --check                  Read-only validation of an existing deployment
-  --dry-run                Show intended host mutations without performing them
+  --dry-run                Show intended mutations without changing the host
   --non-interactive        Never prompt for missing secrets/email
   -h, --help               Show this help
 
@@ -145,6 +145,12 @@ while (($#)); do
     *) die "Unknown argument: $1";;
   esac
 done
+
+# These variables are module state consumed by the sourced Harbor helper files.
+# Exporting them also makes that relationship explicit to ShellCheck.
+export ALLOW_ROOT_FILESYSTEM DB_NAME DB_USER DB_SSL_MODE S3_REGION S3_ROOT_PREFIX \
+  S3_FORCE_PATH_STYLE S3_SKIP_VERIFY S3_REDIRECT_DISABLED NON_INTERACTIVE \
+  TLS_CERT_PATH TLS_KEY_PATH
 
 require_root
 ensure_debian
