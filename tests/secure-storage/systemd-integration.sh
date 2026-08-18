@@ -252,7 +252,10 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 
-run_guest 'test -f /srv/secure/ci-persistence-marker'
+# /srv/secure is intentionally root-owned and mode 0750. The persistence
+# marker therefore must be checked with root privileges; an unprivileged test
+# cannot traverse the mount even when the file exists.
+run_guest 'sudo test -f /srv/secure/ci-persistence-marker'
 run_guest "grep -Fq '/srv/secure/swapfile' /proc/swaps"
 run_guest "sudo docker info --format '{{.DockerRootDir}}' | grep -Fx '/srv/secure/docker'"
 run_guest "cd /home/ci/DeployScripts && sudo bash -c 'source debian/secure-storage/lib/docker.sh; containerd config dump | containerd_root_from_toml' | grep -Fx '/srv/secure/containerd'"
