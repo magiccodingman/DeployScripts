@@ -30,10 +30,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Install test dependencies
+      - name: Verify runner dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends python3-yaml openssl
+          python3 -c 'import yaml'
+          openssl version
+          docker compose version
 
       - name: Compile renderer
         run: python3 -m py_compile debian/harbor/lib/render_config.py
