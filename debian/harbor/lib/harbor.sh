@@ -187,8 +187,8 @@ harbor_health_probe() {
 wait_for_harbor_health() {
   [[ ${DRY_RUN:-0} -eq 1 ]] && return 0
   log_info "Waiting for Harbor API health to become healthy..."
-  local i
-  for i in $(seq 1 60); do
+  local attempts=60
+  while ((attempts-- > 0)); do
     if harbor_health_probe; then
       log_ok "Harbor API reports healthy."
       return 0
