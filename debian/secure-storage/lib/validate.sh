@@ -11,8 +11,18 @@ validate_secure_storage() {
   printf '\nSecure Storage Validation\n'
   printf '%s\n' '-------------------------'
 
-  [[ -f $IMAGE_PATH ]] && check_pass "Image exists: ${IMAGE_PATH}" ||
+  if [[ -f $IMAGE_PATH ]]; then
+    check_pass "Image exists: ${IMAGE_PATH}"
+  else
     check_fail "Image missing: ${IMAGE_PATH}"
+  fi
+
+  if command -v systemd-cryptsetup >/dev/null 2>&1 &&
+     [[ -x /usr/lib/systemd/system-generators/systemd-cryptsetup-generator ]]; then
+    check_pass "systemd cryptsetup boot integration is installed."
+  else
+    check_fail "systemd cryptsetup boot integration is missing (install systemd-cryptsetup)."
+  fi
 
   if [[ -f $IMAGE_PATH ]] && cryptsetup isLuks "$IMAGE_PATH" >/dev/null 2>&1; then
     check_pass "Image is a valid LUKS container."
@@ -23,8 +33,11 @@ validate_secure_storage() {
   if [[ -f $KEY_PATH ]]; then
     local mode
     mode=$(stat -c '%a' "$KEY_PATH")
-    [[ $mode == "600" ]] && check_pass "Machine key permissions are 0600: ${KEY_PATH}" ||
+    if [[ $mode == "600" ]]; then
+      check_pass "Machine key permissions are 0600: ${KEY_PATH}"
+    else
       check_fail "Machine key permissions are ${mode}, expected 0600."
+    fi
 
     if [[ -f $IMAGE_PATH ]] &&
        cryptsetup open --test-passphrase --key-file "$KEY_PATH" "$IMAGE_PATH" >/dev/null 2>&1; then
@@ -36,15 +49,20 @@ validate_secure_storage() {
     check_fail "Machine key missing: ${KEY_PATH}"
   fi
 
-  [[ -e /dev/mapper/$NAME ]] && check_pass "Mapper active: /dev/mapper/${NAME}" ||
+  if [[ -e /dev/mapper/$NAME ]]; then
+    check_pass "Mapper active: /dev/mapper/${NAME}"
+  else
     check_fail "Mapper inactive: /dev/mapper/${NAME}"
+  fi
 
   if mountpoint -q "$MOUNT_PATH"; then
     local source
     source=$(findmnt -n -o SOURCE --target "$MOUNT_PATH")
-    [[ $source == "/dev/mapper/${NAME}" ]] &&
-      check_pass "Mount active: ${MOUNT_PATH}" ||
+    if [[ $source == "/dev/mapper/${NAME}" ]]; then
+      check_pass "Mount active: ${MOUNT_PATH}"
+    else
       check_fail "${MOUNT_PATH} mounted from unexpected source ${source}."
+    fi
   else
     check_fail "Mount inactive: ${MOUNT_PATH}"
   fi
@@ -90,19 +108,24 @@ validate_secure_storage() {
     if command -v jq >/dev/null 2>&1 && [[ -s /etc/docker/daemon.json ]]; then
       local docker_root
       docker_root=$(jq -r '.["data-root"] // empty' /etc/docker/daemon.json 2>/dev/null || true)
-      [[ $docker_root == "${MOUNT_PATH}/docker" ]] &&
-        check_pass "Docker data-root targets encrypted storage." ||
+      if [[ $docker_root == "${MOUNT_PATH}/docker" ]]; then
+        check_pass "Docker data-root targets encrypted storage."
+      else
         check_fail "Docker data-root is '${docker_root:-unset}', expected ${MOUNT_PATH}/docker."
+      fi
     else
       check_fail "Docker configuration cannot be validated (daemon.json or jq missing)."
     fi
 
     if [[ -s /etc/containerd/config.toml ]]; then
       local containerd_root
-      containerd_root=$(awk -F'"' '/^root[[:space:]]*=/ {print $2; exit}' /etc/containerd/config.toml)
-      [[ $containerd_root == "${MOUNT_PATH}/containerd" ]] &&
-        check_pass "containerd persistent root targets encrypted storage." ||
-        check_fail "containerd root is '${containerd_root:-unset}', expected ${MOUNT_PATH}/containerd."
+      containerd_root=$(containerd_root_from_toml < /etc/containerd/config.toml)
+      containerd_root=${containerd_root:-/var/lib/containerd}
+      if [[ $containerd_root == "${MOUNT_PATH}/containerd" ]]; then
+        check_pass "containerd persistent root targets encrypted storage."
+      else
+        check_fail "containerd root is '${containerd_root}', expected ${MOUNT_PATH}/containerd."
+      fi
     else
       check_fail "containerd configuration is missing."
     fi
@@ -120,15 +143,23 @@ validate_secure_storage() {
     if systemctl is-active --quiet docker.service; then
       local active_docker_root
       active_docker_root=$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)
-      [[ $active_docker_root == "${MOUNT_PATH}/docker" ]] &&
-        check_pass "Running Docker daemon uses encrypted data-root." ||
+      if [[ $active_docker_root == "${MOUNT_PATH}/docker" ]]; then
+        check_pass "Running Docker daemon uses encrypted data-root."
+      else
         check_fail "Running Docker daemon uses '${active_docker_root:-unknown}'."
+      fi
     else
       check_fail "Docker service is not active."
     fi
 
     if systemctl is-active --quiet containerd.service; then
-      check_pass "containerd service is active."
+      local active_containerd_root
+      active_containerd_root=$(containerd config dump 2>/dev/null | containerd_root_from_toml)
+      if [[ $active_containerd_root == "${MOUNT_PATH}/containerd" ]]; then
+        check_pass "Running containerd uses encrypted persistent root."
+      else
+        check_fail "Running containerd uses '${active_containerd_root:-unknown}'."
+      fi
     else
       check_fail "containerd service is not active."
     fi

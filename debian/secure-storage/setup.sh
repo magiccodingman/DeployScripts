@@ -2,15 +2,15 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=lib/common.sh
+# shellcheck source=debian/secure-storage/lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
-# shellcheck source=lib/storage.sh
+# shellcheck source=debian/secure-storage/lib/storage.sh
 source "${SCRIPT_DIR}/lib/storage.sh"
-# shellcheck source=lib/swap.sh
+# shellcheck source=debian/secure-storage/lib/swap.sh
 source "${SCRIPT_DIR}/lib/swap.sh"
-# shellcheck source=lib/docker.sh
+# shellcheck source=debian/secure-storage/lib/docker.sh
 source "${SCRIPT_DIR}/lib/docker.sh"
-# shellcheck source=lib/validate.sh
+# shellcheck source=debian/secure-storage/lib/validate.sh
 source "${SCRIPT_DIR}/lib/validate.sh"
 
 trap 'on_error "$LINENO"' ERR

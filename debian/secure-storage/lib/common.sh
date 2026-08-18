@@ -21,11 +21,27 @@ require_root() {
   [[ ${EUID} -eq 0 ]] || die "Run this script as root (for example: sudo $0 ...)."
 }
 
-ensure_debian() {
+os_release_value() {
+  local key=$1
+  [[ $key =~ ^[A-Z0-9_]+$ ]] || die "Invalid os-release key requested: ${key}"
   [[ -r /etc/os-release ]] || die "Cannot identify operating system."
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  [[ ${ID:-} == "debian" ]] || die "This tool currently supports Debian only (detected: ${ID:-unknown})."
+
+  # os-release contains generic names such as NAME and ID. Read it only inside
+  # a subshell so none of those assignments can leak into provisioning state.
+  (
+    set +u
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    printf '%s' "${!key:-}"
+  )
+}
+
+ensure_debian() {
+  local detected_id
+  detected_id=$(os_release_value ID)
+
+  [[ $detected_id == "debian" ]] ||
+    die "This tool currently supports Debian only (detected: ${detected_id:-unknown})."
 }
 
 ensure_absolute_path() {

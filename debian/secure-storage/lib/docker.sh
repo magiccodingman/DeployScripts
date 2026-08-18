@@ -1,6 +1,68 @@
 #!/usr/bin/env bash
 
 MIGRATED_SOURCES=()
+MIGRATION_DESTINATIONS=()
+
+containerd_root_from_toml() {
+  awk '
+    BEGIN { in_section = 0 }
+    /^[[:space:]]*\[/ { in_section = 1 }
+    !in_section && /^[[:space:]]*root[[:space:]]*=/ {
+      value = $0
+      sub(/^[[:space:]]*root[[:space:]]*=[[:space:]]*/, "", value)
+      sub(/[[:space:]]+#.*$/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+
+      quote = substr(value, 1, 1)
+      if ((quote == "\"" || quote == "\047") && substr(value, length(value), 1) == quote) {
+        value = substr(value, 2, length(value) - 2)
+      }
+
+      print value
+      exit
+    }
+  '
+}
+
+write_containerd_root_config() {
+  local file=$1
+  local target=$2
+  local tmp
+  tmp=$(mktemp)
+
+  awk -v target="$target" '
+    BEGIN {
+      in_section = 0
+      wrote_root = 0
+    }
+
+    !in_section && /^[[:space:]]*root[[:space:]]*=/ {
+      print "root = \047" target "\047"
+      wrote_root = 1
+      next
+    }
+
+    /^[[:space:]]*\[/ {
+      if (!wrote_root) {
+        print "root = \047" target "\047"
+        print ""
+        wrote_root = 1
+      }
+      in_section = 1
+    }
+
+    { print }
+
+    END {
+      if (!wrote_root) {
+        print "root = \047" target "\047"
+      }
+    }
+  ' "$file" > "$tmp"
+
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
+}
 
 ensure_docker_repository() {
   ensure_packages ca-certificates curl
@@ -21,16 +83,16 @@ ensure_docker_repository() {
     rm -f "$key_tmp"
   fi
 
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  local arch
+  local version_codename arch
+  version_codename=$(os_release_value VERSION_CODENAME)
+  [[ -n $version_codename ]] || die "Debian VERSION_CODENAME is missing from /etc/os-release."
   arch=$(dpkg --print-architecture)
 
   local desired
   desired=$(cat <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/debian
-Suites: ${VERSION_CODENAME}
+Suites: ${version_codename}
 Components: stable
 Architectures: ${arch}
 Signed-By: /etc/apt/keyrings/docker.asc
@@ -77,6 +139,7 @@ stop_container_services() {
 migrate_directory() {
   local source=$1
   local destination=$2
+  local marker="${destination}/.deployscripts-migration-source"
 
   run install -d -m 0711 "$destination"
 
@@ -84,16 +147,31 @@ migrate_directory() {
   path_has_content "$source" || return 0
 
   if path_has_content "$destination"; then
-    die "Both ${source} and ${destination} contain data. Refusing to merge automatically."
+    if [[ -f $marker ]] && [[ "$(cat "$marker")" == "$source" ]]; then
+      log_info "Resuming interrupted migration ${source} -> ${destination}..."
+    else
+      die "Both ${source} and ${destination} contain data. Refusing to merge automatically because the destination is not marked as an interrupted DeployScripts migration."
+    fi
+  else
+    if [[ ${DRY_RUN:-0} -eq 1 ]]; then
+      log_info "Would mark ${destination} as an in-progress migration from ${source}."
+    else
+      printf '%s\n' "$source" > "$marker"
+      chmod 0600 "$marker"
+    fi
   fi
 
   log_info "Migrating ${source} -> ${destination}..."
-  run rsync -aHAX --numeric-ids "${source}/" "${destination}/"
+  run rsync -aHAX --numeric-ids --delete \
+    --exclude='.deployscripts-migration-source' \
+    "${source}/" "${destination}/"
+
   MIGRATED_SOURCES+=("$source")
+  MIGRATION_DESTINATIONS+=("$destination")
 }
 
 cleanup_migrated_sources() {
-  local source
+  local source destination
   for source in "${MIGRATED_SOURCES[@]}"; do
     case "$source" in
       /var/lib/docker|/var/lib/containerd)
@@ -108,6 +186,10 @@ cleanup_migrated_sources() {
         log_warn "Data was migrated from custom path ${source}; leaving the old copy in place for manual review."
         ;;
     esac
+  done
+
+  for destination in "${MIGRATION_DESTINATIONS[@]}"; do
+    run rm -f "${destination}/.deployscripts-migration-source"
   done
 }
 
@@ -151,16 +233,23 @@ configure_containerd_root() {
   fi
 
   local current_root
-  current_root=$(awk -F'"' '/^root[[:space:]]*=/ {print $2; exit}' /etc/containerd/config.toml)
-  [[ -n $current_root ]] || die "Could not locate top-level containerd root setting in /etc/containerd/config.toml."
+  current_root=$(containerd_root_from_toml < /etc/containerd/config.toml)
+  current_root=${current_root:-/var/lib/containerd}
 
   if [[ $current_root != "$target" ]]; then
     backup_file /etc/containerd/config.toml
     if [[ ${DRY_RUN:-0} -eq 1 ]]; then
       log_info "Would set containerd persistent root to ${target}."
     else
-      sed -i -E "0,/^root[[:space:]]*=/{s|^root[[:space:]]*=.*|root = \"${target}\"|}" /etc/containerd/config.toml
+      write_containerd_root_config /etc/containerd/config.toml "$target"
     fi
+  fi
+
+  if [[ ${DRY_RUN:-0} -eq 0 ]]; then
+    local parsed_root
+    parsed_root=$(containerd --config /etc/containerd/config.toml config dump 2>/dev/null | containerd_root_from_toml)
+    [[ $parsed_root == "$target" ]] ||
+      die "containerd rejected or normalized the configured root unexpectedly: ${parsed_root:-unset}"
   fi
 }
 
@@ -205,7 +294,7 @@ configure_docker() {
   fi
 
   if [[ -s /etc/containerd/config.toml ]]; then
-    old_containerd_root=$(awk -F'"' '/^root[[:space:]]*=/ {print $2; exit}' /etc/containerd/config.toml)
+    old_containerd_root=$(containerd_root_from_toml < /etc/containerd/config.toml)
     old_containerd_root=${old_containerd_root:-/var/lib/containerd}
   fi
 
@@ -232,9 +321,9 @@ configure_docker() {
       die "Docker started with unexpected data-root: ${actual}"
 
     local containerd_actual
-    containerd_actual=$(containerd config dump 2>/dev/null | awk -F'"' '/^root[[:space:]]*=/ {print $2; exit}')
+    containerd_actual=$(containerd config dump 2>/dev/null | containerd_root_from_toml)
     [[ $containerd_actual == "${MOUNT_PATH}/containerd" ]] ||
-      die "containerd started with unexpected root: ${containerd_actual}"
+      die "containerd started with unexpected root: ${containerd_actual:-unset}"
   fi
 
   cleanup_migrated_sources

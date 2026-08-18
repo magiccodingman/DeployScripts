@@ -32,12 +32,21 @@ ensure_image() {
 
   [[ -n ${IMAGE_SIZE:-} ]] || die "--image-size is required when creating a new encrypted image."
 
+  local image_parent space_check_path requested_bytes available_bytes
+  image_parent=$(dirname "$IMAGE_PATH")
   ensure_image_parent
 
-  local requested_bytes available_bytes
   requested_bytes=$(numfmt --from=iec "$IMAGE_SIZE" 2>/dev/null) ||
     die "Invalid image size: ${IMAGE_SIZE} (examples: 10G, 26G, 512M)"
-  available_bytes=$(df --output=avail -B1 "$(dirname "$IMAGE_PATH")" | tail -n1 | tr -d ' ')
+
+  # During --dry-run the parent is intentionally not created. Walk upward to
+  # the nearest existing directory so free-space validation remains read-only.
+  space_check_path=$image_parent
+  while [[ ! -e $space_check_path && $space_check_path != "/" ]]; do
+    space_check_path=$(dirname "$space_check_path")
+  done
+
+  available_bytes=$(df --output=avail -B1 "$space_check_path" | tail -n1 | tr -d ' ')
 
   local reserve=$((2 * 1024 * 1024 * 1024))
   (( requested_bytes + reserve <= available_bytes )) ||
@@ -175,7 +184,10 @@ ensure_mount() {
 }
 
 configure_storage() {
-  ensure_packages cryptsetup e2fsprogs util-linux
+  # cryptsetup provides the interactive/runtime tools. Debian 13 packages the
+  # systemd generator and boot units that consume /etc/crypttab separately in
+  # systemd-cryptsetup, so both are required for reliable automatic unlock.
+  ensure_packages cryptsetup systemd-cryptsetup e2fsprogs util-linux
 
   ensure_image
   ensure_luks
