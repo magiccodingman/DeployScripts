@@ -24,7 +24,7 @@ chmod 0600 "$WORK/tls/harbor.example.com.key"
 export HARBOR_DB_PASSWORD='ci-db-secret'
 export HARBOR_S3_ACCESS_KEY='ci-access-key'
 export HARBOR_S3_SECRET_KEY='ci-secret-key'
-export HARBOR_ADMIN_PASSWORD='ci-admin-secret'
+export HARBOR_ADMIN_PASSWORD='ci-admin-prefix$vG6Yy7J7sHpP1-suffix'
 
 python3 "$ROOT/debian/harbor/lib/render_config.py" \
   --template "$WORK/harbor/harbor.yml.tmpl" \
@@ -48,8 +48,34 @@ printf 'Running Harbor official prepare...\n'
 (
   cd "$WORK/harbor"
   ./prepare
-  sudo docker compose -f docker-compose.yml config >/dev/null
 )
+
+sudo python3 "$ROOT/debian/harbor/lib/protect_compose_env_files.py" "$WORK/harbor/docker-compose.yml"
+sudo python3 "$ROOT/debian/harbor/lib/protect_compose_env_files.py" --check "$WORK/harbor/docker-compose.yml"
+
+compose_json="$WORK/compose.json"
+compose_stderr="$WORK/compose.stderr"
+if ! sudo docker compose -f "$WORK/harbor/docker-compose.yml" config --format json >"$compose_json" 2>"$compose_stderr"; then
+  cat "$compose_stderr" >&2
+  exit 1
+fi
+if grep -Fq 'variable is not set' "$compose_stderr"; then
+  printf 'FAIL: Docker Compose attempted variable interpolation in a Harbor env file\n' >&2
+  exit 1
+fi
+
+EXPECTED_HARBOR_ADMIN_PASSWORD="$HARBOR_ADMIN_PASSWORD" python3 - "$compose_json" <<'PY'
+import json
+import os
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as fh:
+    compose = json.load(fh)
+actual = compose['services']['core']['environment']['HARBOR_ADMIN_PASSWORD']
+expected = os.environ['EXPECTED_HARBOR_ADMIN_PASSWORD']
+assert actual == expected, 'Harbor admin password was changed by Compose env-file parsing'
+PY
+printf 'Harbor literal-dollar admin password regression: PASS\n'
 
 services=$(sudo docker compose -f "$WORK/harbor/docker-compose.yml" config --services)
 if grep -Eq '^(database|postgresql)$' <<<"$services"; then
