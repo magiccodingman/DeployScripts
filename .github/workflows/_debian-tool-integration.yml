@@ -25,7 +25,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - name: Cache Debian 13 cloud image
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2
+          key: debian-13-genericcloud-amd64-${{ hashFiles('tests/secure-storage/debian-cloud-image-cache-version.txt') }}
+
       - name: Run integration harness
         env:
           DEPLOYSCRIPTS_CI: "1"
+          DEPLOYSCRIPTS_DEBIAN_IMAGE_CACHE: /home/runner/.cache/deployscripts/debian-13-genericcloud-amd64.qcow2
         run: bash "${{ inputs.test-script }}"
