@@ -184,7 +184,10 @@ ensure_mount() {
 }
 
 configure_storage() {
-  ensure_packages cryptsetup e2fsprogs util-linux
+  # cryptsetup provides the interactive/runtime tools. Debian 13 packages the
+  # systemd generator and boot units that consume /etc/crypttab separately in
+  # systemd-cryptsetup, so both are required for reliable automatic unlock.
+  ensure_packages cryptsetup systemd-cryptsetup e2fsprogs util-linux
 
   ensure_image
   ensure_luks
