@@ -1,0 +1,29 @@
+name: Debian Secure Storage
+
+on:
+  pull_request:
+    paths:
+      - 'debian/secure-storage/**'
+      - 'tests/secure-storage/**'
+      - 'tests/bash-syntax.sh'
+      - '.github/workflows/debian-secure-storage.yml'
+      - '.github/workflows/_debian-tool-integration.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'debian/secure-storage/**'
+      - 'tests/secure-storage/**'
+      - 'tests/bash-syntax.sh'
+      - '.github/workflows/debian-secure-storage.yml'
+      - '.github/workflows/_debian-tool-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    uses: ./.github/workflows/_debian-tool-integration.yml
+    with:
+      test-script: tests/secure-storage/systemd-integration.sh
+      timeout-minutes: 30
