@@ -21,16 +21,16 @@ ensure_docker_repository() {
     rm -f "$key_tmp"
   fi
 
-  # shellcheck disable=SC1091
-  source /etc/os-release
-  local arch
+  local version_codename arch
+  version_codename=$(os_release_value VERSION_CODENAME)
+  [[ -n $version_codename ]] || die "Debian VERSION_CODENAME is missing from /etc/os-release."
   arch=$(dpkg --print-architecture)
 
   local desired
   desired=$(cat <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/debian
-Suites: ${VERSION_CODENAME}
+Suites: ${version_codename}
 Components: stable
 Architectures: ${arch}
 Signed-By: /etc/apt/keyrings/docker.asc
