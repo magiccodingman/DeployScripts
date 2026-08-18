@@ -135,7 +135,17 @@ prepare_harbor() {
     printf '\n'
     return 0
   fi
+
   (cd "$INSTALL_DIR" && ./prepare "${prepare_args[@]}")
+
+  # Harbor emits final container environment files with unquoted values. Docker
+  # Compose normally interpolates $NAME in env_file values, which can silently
+  # truncate or alter passwords and other secrets containing dollar signs.
+  # Mark every Harbor-generated env_file as raw so Compose passes values exactly
+  # as Harbor generated them, with no interpolation.
+  python3 "${SCRIPT_DIR}/lib/protect_compose_env_files.py" "${INSTALL_DIR}/docker-compose.yml"
+  python3 "${SCRIPT_DIR}/lib/protect_compose_env_files.py" --check "${INSTALL_DIR}/docker-compose.yml"
+
   docker compose -f "${INSTALL_DIR}/docker-compose.yml" config >/dev/null
   log_ok "Harbor prepare and Docker Compose validation succeeded."
 }
@@ -155,7 +165,14 @@ harbor_health_probe() {
   local body
   body=$(curl --silent --show-error --max-time 5 "${curl_args[@]}" "$url" 2>/dev/null || true)
   [[ -n $body ]] || return 1
-  python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("status") == "healthy" else 1)' <<<"$body"
+  python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except (json.JSONDecodeError, UnicodeDecodeError):
+    raise SystemExit(1)
+raise SystemExit(0 if data.get("status") == "healthy" else 1)
+' <<<"$body"
 }
 
 wait_for_harbor_health() {
