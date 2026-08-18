@@ -22,7 +22,10 @@ validate_harbor() {
     else
       check_fail "Docker Compose configuration is invalid."
     fi
-    if docker compose -f "${INSTALL_DIR}/docker-compose.yml" config --services 2>/dev/null | grep -qx database; then
+
+    local compose_services
+    compose_services=$(docker compose -f "${INSTALL_DIR}/docker-compose.yml" config --services 2>/dev/null || true)
+    if grep -Eq '^(database|postgresql)$' <<<"$compose_services"; then
       check_fail "Local Harbor PostgreSQL service is present; external database was expected."
     else
       check_pass "No local Harbor PostgreSQL service is configured."
