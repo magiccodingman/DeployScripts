@@ -17,8 +17,9 @@ SSH_OPTS=(
   -o LogLevel=ERROR
 )
 
-cleanup() {
-  if [[ -n $VM_PID ]] && kill -0 "$VM_PID" 2>/dev/null; then
+stop_vm_forcefully() {
+  [[ -n $VM_PID ]] || return 0
+  if kill -0 "$VM_PID" 2>/dev/null; then
     kill "$VM_PID" 2>/dev/null || true
     for _ in $(seq 1 20); do
       kill -0 "$VM_PID" 2>/dev/null || break
@@ -26,6 +27,11 @@ cleanup() {
     done
     kill -9 "$VM_PID" 2>/dev/null || true
   fi
+  VM_PID=""
+}
+
+cleanup() {
+  stop_vm_forcefully
   rm -rf "$WORK_DIR"
 }
 trap cleanup EXIT
@@ -53,6 +59,37 @@ run_guest() {
   # The caller supplies a complete remote command string intentionally.
   # shellcheck disable=SC2029
   ssh "${SSH_OPTS[@]}" ci@127.0.0.1 "$command"
+}
+
+wait_for_vm_exit() {
+  local previous_pid=$1
+  for _ in $(seq 1 90); do
+    if ! kill -0 "$previous_pid" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  show_vm_diagnostics
+  printf 'Timed out waiting for Debian VM process %s to exit.\n' "$previous_pid" >&2
+  return 1
+}
+
+start_vm() {
+  : > "${WORK_DIR}/serial.log"
+  qemu-system-x86_64 \
+    -accel "$ACCEL" \
+    -m 3072 \
+    -smp 2 \
+    -drive "file=${WORK_DIR}/debian-ci.qcow2,if=virtio,format=qcow2" \
+    -drive "file=${WORK_DIR}/seed.img,if=virtio,format=raw,readonly=on" \
+    -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22" \
+    -display none \
+    -serial "file:${WORK_DIR}/serial.log" \
+    -daemonize \
+    -pidfile "${WORK_DIR}/qemu.pid"
+
+  VM_PID=$(cat "${WORK_DIR}/qemu.pid")
+  wait_for_ssh
 }
 
 printf 'Installing QEMU/cloud-image test dependencies...\n'
@@ -116,21 +153,7 @@ if [[ -e /dev/kvm && -r /dev/kvm && -w /dev/kvm ]]; then
   ACCEL=kvm
 fi
 printf 'Starting Debian 13 QEMU VM with %s acceleration...\n' "$ACCEL"
-
-qemu-system-x86_64 \
-  -accel "$ACCEL" \
-  -m 3072 \
-  -smp 2 \
-  -drive "file=${WORK_DIR}/debian-ci.qcow2,if=virtio,format=qcow2" \
-  -drive "file=${WORK_DIR}/seed.img,if=virtio,format=raw,readonly=on" \
-  -nic "user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22" \
-  -display none \
-  -serial "file:${WORK_DIR}/serial.log" \
-  -daemonize \
-  -pidfile "${WORK_DIR}/qemu.pid"
-
-VM_PID=$(cat "${WORK_DIR}/qemu.pid")
-wait_for_ssh
+start_vm
 run_guest 'cloud-init status --wait'
 
 printf 'Copying PR contents into Debian VM...\n'
@@ -172,18 +195,23 @@ run_guest 'cd /home/ci/DeployScripts && sudo bash debian/secure-storage/setup.sh
 printf 'Rerunning provisioning non-interactively to prove idempotency...\n'
 run_guest 'cd /home/ci/DeployScripts && sudo bash debian/secure-storage/setup.sh --name ci-secure --mount /srv/secure --swap 512M --docker --non-interactive'
 
-printf 'Checking encrypted runtime locations before reboot...\n'
+printf 'Checking encrypted runtime locations before cold boot...\n'
 run_guest "sudo docker info --format '{{.DockerRootDir}}' | grep -Fx '/srv/secure/docker'"
 run_guest "cd /home/ci/DeployScripts && sudo bash -c 'source debian/secure-storage/lib/docker.sh; containerd config dump | containerd_root_from_toml' | grep -Fx '/srv/secure/containerd'"
 run_guest "grep -Fq '/srv/secure/swapfile' /proc/swaps"
 run_guest "printf 'secure-storage-ci\\n' | sudo tee /srv/secure/ci-persistence-marker >/dev/null"
 
-printf 'Rebooting the Debian VM to validate crypttab/fstab/systemd ordering...\n'
-run_guest 'sudo reboot' >/dev/null 2>&1 || true
-sleep 5
-wait_for_ssh
+printf 'Powering off Debian VM to validate a full cold boot...\n'
+OLD_VM_PID=$VM_PID
+run_guest 'sudo systemctl poweroff' >/dev/null 2>&1 || true
+wait_for_vm_exit "$OLD_VM_PID"
+VM_PID=""
+sleep 2
 
-printf 'Validating boot-time state after real VM reboot...\n'
+printf 'Starting the same Debian disk again...\n'
+start_vm
+
+printf 'Validating boot-time state after cold boot...\n'
 for _ in $(seq 1 60); do
   if run_guest 'sudo systemctl is-active --quiet docker.service containerd.service' >/dev/null 2>&1; then
     break
