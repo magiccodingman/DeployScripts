@@ -53,9 +53,8 @@ printf 'Running Harbor official prepare...\n'
 sudo python3 "$ROOT/debian/harbor/lib/protect_compose_env_files.py" "$WORK/harbor/docker-compose.yml"
 sudo python3 "$ROOT/debian/harbor/lib/protect_compose_env_files.py" --check "$WORK/harbor/docker-compose.yml"
 
-compose_json="$WORK/compose.json"
 compose_stderr="$WORK/compose.stderr"
-if ! sudo docker compose -f "$WORK/harbor/docker-compose.yml" config --format json >"$compose_json" 2>"$compose_stderr"; then
+if ! sudo docker compose -f "$WORK/harbor/docker-compose.yml" config >/dev/null 2>"$compose_stderr"; then
   cat "$compose_stderr" >&2
   exit 1
 fi
@@ -64,18 +63,19 @@ if grep -Fq 'variable is not set' "$compose_stderr"; then
   exit 1
 fi
 
-EXPECTED_HARBOR_ADMIN_PASSWORD="$HARBOR_ADMIN_PASSWORD" python3 - "$compose_json" <<'PY'
-import json
-import os
-import sys
+cat > "$WORK/password-probe.yml" <<'YAML'
+services:
+  probe:
+    image: alpine:3.22
+    env_file:
+      - path: ./harbor/common/config/core/env
+        format: raw
+YAML
 
-with open(sys.argv[1], encoding='utf-8') as fh:
-    compose = json.load(fh)
-actual = compose['services']['core']['environment']['HARBOR_ADMIN_PASSWORD']
-expected = os.environ['EXPECTED_HARBOR_ADMIN_PASSWORD']
-assert actual == expected, 'Harbor admin password was changed by Compose env-file parsing'
-PY
-printf 'Harbor literal-dollar admin password regression: PASS\n'
+sudo docker compose -f "$WORK/password-probe.yml" run --rm --no-deps \
+  -e EXPECTED_HARBOR_ADMIN_PASSWORD="$HARBOR_ADMIN_PASSWORD" \
+  probe sh -ec 'test "$HARBOR_ADMIN_PASSWORD" = "$EXPECTED_HARBOR_ADMIN_PASSWORD"'
+printf 'Harbor literal-dollar admin password runtime regression: PASS\n'
 
 services=$(sudo docker compose -f "$WORK/harbor/docker-compose.yml" config --services)
 if grep -Eq '^(database|postgresql)$' <<<"$services"; then
