@@ -28,4 +28,36 @@ if [[ -r /etc/os-release ]] && grep -Eq '^ID=("?debian"?)$' /etc/os-release; the
   fi
 fi
 
+printf 'containerd regression: parse v2/v3 TOML root quoting\n'
+if ! (
+  # shellcheck disable=SC1091
+  source "$ROOT/debian/secure-storage/lib/docker.sh"
+
+  single=$(printf '%s\n' \
+    'version = 3' \
+    "root = '/var/lib/containerd'" \
+    "state = '/run/containerd'" \
+    '[plugins]' \
+    "root = 'nested-value-that-must-not-win'" | containerd_root_from_toml)
+  [[ $single == '/var/lib/containerd' ]]
+
+  double=$(printf '%s\n' \
+    'version = 2' \
+    'root = "/custom/containerd"' \
+    '[grpc]' | containerd_root_from_toml)
+  [[ $double == '/custom/containerd' ]]
+
+  omitted=$(printf '%s\n' 'version = 3' '[grpc]' "address = '/run/containerd.sock'" | containerd_root_from_toml)
+  [[ -z $omitted ]]
+
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+  printf '%s\n' 'version = 3' '[grpc]' "address = '/run/containerd.sock'" > "$tmp"
+  write_containerd_root_config "$tmp" '/srv/secure/containerd'
+  [[ $(containerd_root_from_toml < "$tmp") == '/srv/secure/containerd' ]]
+); then
+  printf 'FAIL: containerd TOML root compatibility regression\n' >&2
+  status=1
+fi
+
 exit "$status"
