@@ -74,6 +74,7 @@ s3_probe() {
     log_info "Would validate S3 bucket access using Signature V4 and path-style=${S3_FORCE_PATH_STYLE}."
     return 0
   fi
+
   HARBOR_S3_ENDPOINT="$S3_ENDPOINT" \
   HARBOR_S3_BUCKET="$S3_BUCKET" \
   HARBOR_S3_REGION="$S3_REGION" \
@@ -82,35 +83,8 @@ s3_probe() {
   HARBOR_S3_PROBE_MODE="$mode" \
   HARBOR_S3_ACCESS_KEY="$HARBOR_S3_ACCESS_KEY" \
   HARBOR_S3_SECRET_KEY="$HARBOR_S3_SECRET_KEY" \
-  python3 - <<'PY'
-import os, uuid
-import boto3
-from botocore.config import Config
+    python3 "${SCRIPT_DIR}/lib/s3_probe.py"
 
-endpoint = os.environ['HARBOR_S3_ENDPOINT']
-bucket = os.environ['HARBOR_S3_BUCKET']
-region = os.environ['HARBOR_S3_REGION']
-style = 'path' if os.environ['HARBOR_S3_FORCE_PATH_STYLE'] == '1' else 'virtual'
-verify = os.environ['HARBOR_S3_SKIP_VERIFY'] != '1'
-mode = os.environ.get('HARBOR_S3_PROBE_MODE', 'write')
-client = boto3.client(
-    's3', endpoint_url=endpoint, region_name=region,
-    aws_access_key_id=os.environ['HARBOR_S3_ACCESS_KEY'],
-    aws_secret_access_key=os.environ['HARBOR_S3_SECRET_KEY'],
-    verify=verify,
-    config=Config(signature_version='s3v4', s3={'addressing_style': style}),
-)
-client.head_bucket(Bucket=bucket)
-if mode == 'write':
-    key = f'.deployscripts-probe/{uuid.uuid4().hex}'
-    try:
-        client.put_object(Bucket=bucket, Key=key, Body=b'deployscripts-harbor-probe')
-    finally:
-        try:
-            client.delete_object(Bucket=bucket, Key=key)
-        except Exception:
-            pass
-PY
   log_ok "S3 bucket validation succeeded."
 }
 
