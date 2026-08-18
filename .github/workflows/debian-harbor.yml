@@ -40,6 +40,7 @@ jobs:
         run: |
           python3 -m py_compile debian/harbor/lib/render_config.py
           python3 -m py_compile debian/harbor/lib/s3_probe.py
+          python3 -m py_compile debian/harbor/lib/protect_compose_env_files.py
           python3 -m py_compile tests/harbor/s3-probe-http-shape.py
 
       - name: Config renderer regression
