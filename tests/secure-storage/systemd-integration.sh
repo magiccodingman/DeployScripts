@@ -37,8 +37,7 @@ show_vm_diagnostics() {
 }
 
 wait_for_ssh() {
-  local attempts=${1:-180}
-  for _ in $(seq 1 "$attempts"); do
+  for _ in $(seq 1 180); do
     if ssh "${SSH_OPTS[@]}" ci@127.0.0.1 true >/dev/null 2>&1; then
       return 0
     fi
@@ -50,7 +49,10 @@ wait_for_ssh() {
 }
 
 run_guest() {
-  ssh "${SSH_OPTS[@]}" ci@127.0.0.1 "$@"
+  local command=$1
+  # The caller supplies a complete remote command string intentionally.
+  # shellcheck disable=SC2029
+  ssh "${SSH_OPTS[@]}" ci@127.0.0.1 "$command"
 }
 
 printf 'Installing QEMU/cloud-image test dependencies...\n'
