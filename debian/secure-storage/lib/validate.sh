@@ -17,6 +17,13 @@ validate_secure_storage() {
     check_fail "Image missing: ${IMAGE_PATH}"
   fi
 
+  if command -v systemd-cryptsetup >/dev/null 2>&1 &&
+     [[ -x /usr/lib/systemd/system-generators/systemd-cryptsetup-generator ]]; then
+    check_pass "systemd cryptsetup boot integration is installed."
+  else
+    check_fail "systemd cryptsetup boot integration is missing (install systemd-cryptsetup)."
+  fi
+
   if [[ -f $IMAGE_PATH ]] && cryptsetup isLuks "$IMAGE_PATH" >/dev/null 2>&1; then
     check_pass "Image is a valid LUKS container."
   else
