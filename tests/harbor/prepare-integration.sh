@@ -24,7 +24,7 @@ chmod 0600 "$WORK/tls/harbor.example.com.key"
 export HARBOR_DB_PASSWORD='ci-db-secret'
 export HARBOR_S3_ACCESS_KEY='ci-access-key'
 export HARBOR_S3_SECRET_KEY='ci-secret-key'
-export HARBOR_ADMIN_PASSWORD='ci-admin-prefix$vG6Yy7J7sHpP1-suffix'
+export HARBOR_ADMIN_PASSWORD='ci-admin-prefix'"$"'vG6Yy7J7sHpP1-suffix'
 
 python3 "$ROOT/debian/harbor/lib/render_config.py" \
   --template "$WORK/harbor/harbor.yml.tmpl" \
