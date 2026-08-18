@@ -92,9 +92,12 @@ start_vm() {
   wait_for_ssh
 }
 
-printf 'Installing QEMU/cloud-image test dependencies...\n'
+printf 'Installing minimal QEMU/cloud-image test dependencies...\n'
 sudo apt-get update
-sudo apt-get install -y \
+# qemu-system-x86 recommends GUI, audio, Spice and GStreamer packages that are
+# irrelevant to this headless test. Avoiding recommends keeps the runner
+# bootstrap small and substantially faster.
+sudo apt-get install -y --no-install-recommends \
   qemu-system-x86 \
   qemu-utils \
   cloud-image-utils \
