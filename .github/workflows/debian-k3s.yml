@@ -1,0 +1,48 @@
+name: Debian K3s
+
+on:
+  pull_request:
+    paths:
+      - 'debian/k3s/**'
+      - 'tests/k3s/**'
+      - 'tests/debian/**'
+      - 'tests/bash-syntax.sh'
+      - '.github/workflows/debian-k3s.yml'
+      - '.github/workflows/_debian-tool-integration.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'debian/k3s/**'
+      - 'tests/k3s/**'
+      - 'tests/debian/**'
+      - 'tests/bash-syntax.sh'
+      - '.github/workflows/debian-k3s.yml'
+      - '.github/workflows/_debian-tool-integration.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: K3s config and state regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Render every role and validate protected state
+        run: |
+          bash tests/k3s/config-render.sh
+          sudo bash tests/k3s/state-and-secrets.sh
+
+  integration:
+    needs: regression
+    uses: ./.github/workflows/_debian-tool-integration.yml
+    with:
+      test-script: tests/k3s/systemd-integration.sh
+      timeout-minutes: 45

@@ -61,6 +61,35 @@ Database/S3/admin secrets are prompted interactively or supplied through documen
 
 Detailed documentation: [`docs/debian/harbor.md`](docs/debian/harbor.md)
 
+### K3s
+
+Creates or joins K3s nodes on Debian with:
+
+- explicit `init-server`, `join-server`, and `join-agent` modes;
+- embedded-etcd or SQLite initialization;
+- stable HAProxy/API endpoint certificate configuration;
+- private/WireGuard-aware node networking and public-VXLAN protection;
+- Secret encryption, scheduled compressed etcd snapshots, and optional private
+  registry configuration;
+- root-only token handling, `--check`, `--dry-run`, and idempotent reruns.
+
+Quick start:
+
+```bash
+sudo ./debian/k3s/setup.sh \
+  --mode init-server \
+  --node-name k3s-01 \
+  --node-ip 10.250.0.11 \
+  --api-endpoint https://k3s-api.example.com:6443 \
+  --datastore embedded-etcd \
+  --flannel-backend vxlan
+```
+
+K3s uses its standard data paths and is independent of the secure-storage
+capability.
+
+Detailed documentation: [`docs/debian/k3s.md`](docs/debian/k3s.md)
+
 ## Repository conventions
 
 See [`docs/conventions.md`](docs/conventions.md) for layout, naming, idempotency, safety, and documentation rules.
