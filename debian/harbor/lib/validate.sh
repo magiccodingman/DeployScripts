@@ -17,6 +17,13 @@ validate_harbor() {
 
   if [[ -f ${INSTALL_DIR}/docker-compose.yml ]]; then
     check_pass "Generated Docker Compose file exists."
+
+    if python3 "${SCRIPT_DIR}/lib/protect_compose_env_files.py" --check "${INSTALL_DIR}/docker-compose.yml" >/dev/null 2>&1; then
+      check_pass "Harbor Compose env files are protected from variable interpolation."
+    else
+      check_fail "Harbor Compose env files are not configured with raw literal values."
+    fi
+
     if docker compose -f "${INSTALL_DIR}/docker-compose.yml" config >/dev/null 2>&1; then
       check_pass "Docker Compose configuration parses successfully."
     else
