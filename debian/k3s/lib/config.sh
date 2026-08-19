@@ -188,11 +188,11 @@ ensure_no_unmanaged_config_conflicts() {
   done
 }
 
-write_k3s_configs() {
+write_k3s_configs() (
   run install -d -o root -g root -m 0755 "$K3S_DROPIN_DIR"
   local work
   work=$(mktemp -d)
-  trap 'rm -rf "$work"' RETURN
+  trap 'rm -rf "$work"' EXIT
 
   if [[ $MODE != join-agent ]]; then
     render_cluster_config "${work}/10-deployscripts-cluster.yaml"
@@ -208,7 +208,7 @@ write_k3s_configs() {
   write_if_changed "${work}/20-deployscripts-node.yaml" "${K3S_DROPIN_DIR}/20-deployscripts-node.yaml" 0600
   write_if_changed "${work}/30-deployscripts-role.yaml" "${K3S_DROPIN_DIR}/30-deployscripts-role.yaml" 0600
   install_registry_config
-}
+)
 
 write_array_state() {
   local name=$1

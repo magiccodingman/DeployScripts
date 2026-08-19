@@ -80,5 +80,14 @@ if (ensure_no_unmanaged_config_conflicts >/dev/null 2>&1); then
   printf 'Overlapping unmanaged config was not rejected.\n' >&2
   exit 1
 fi
+rm "$K3S_DROPIN_DIR/90-operator.yaml"
+
+# Config rendering uses a temporary directory. Exercise the complete writer so
+# its cleanup handler cannot leak into the caller and fail later under nounset.
+write_k3s_configs
+[[ -f $K3S_DROPIN_DIR/10-deployscripts-cluster.yaml ]]
+[[ -f $K3S_DROPIN_DIR/20-deployscripts-node.yaml ]]
+[[ -f $K3S_DROPIN_DIR/30-deployscripts-role.yaml ]]
+true
 
 printf 'K3s state and secret handling: PASS\n'
