@@ -99,7 +99,18 @@ REMOTE_AUTHORIZED_KEYS
 
 test_key_directly() {
   local identity=$1
-  local direct_args=(-p "$PORT" -o ConnectTimeout=10 -o BatchMode=yes -o IdentitiesOnly=yes -i "$identity")
+  local effective user_known_hosts strict_host_key proxy_jump host_key_alias
+  effective=$(ssh -G -F "$SSH_CONFIG" "$NAME" 2>/dev/null)
+  user_known_hosts=$(awk '$1 == "userknownhostsfile" {$1=""; sub(/^ /, ""); print; exit}' <<< "$effective")
+  strict_host_key=$(awk '$1 == "stricthostkeychecking" {print $2; exit}' <<< "$effective")
+  proxy_jump=$(awk '$1 == "proxyjump" {print $2; exit}' <<< "$effective")
+  host_key_alias=$(awk '$1 == "hostkeyalias" {print $2; exit}' <<< "$effective")
+
+  local direct_args=(-F /dev/null -p "$PORT" -o ConnectTimeout=10 -o BatchMode=yes -o IdentitiesOnly=yes -i "$identity")
+  [[ -z $user_known_hosts || $user_known_hosts == none ]] || direct_args+=(-o "UserKnownHostsFile=${user_known_hosts}")
+  [[ -z $strict_host_key ]] || direct_args+=(-o "StrictHostKeyChecking=${strict_host_key}")
+  [[ -z $proxy_jump || $proxy_jump == none ]] || direct_args+=(-J "$proxy_jump")
+  [[ -z $host_key_alias || $host_key_alias == none ]] || direct_args+=(-o "HostKeyAlias=${host_key_alias}")
   ssh "${direct_args[@]}" "${REMOTE_USER}@${HOST}" true
 }
 
