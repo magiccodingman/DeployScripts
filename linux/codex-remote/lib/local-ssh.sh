@@ -154,9 +154,9 @@ ensure_ssh_include() {
   {
     printf '%s\nInclude %s\n' "$marker" "$include_glob"
     if [[ -f $SSH_CONFIG ]]; then
-      awk -v marker="$marker" -v include="$include_glob" '
+      awk -v marker="$marker" -v include_path="$include_glob" '
         $0 == marker { next }
-        $1 == "Include" && $2 == include { next }
+        $1 == "Include" && $2 == include_path { next }
         { print }
       ' "$SSH_CONFIG"
     fi
