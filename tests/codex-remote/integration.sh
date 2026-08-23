@@ -43,6 +43,11 @@ export HOME="$TEST_ROOT/home"
 mkdir -p "$HOME/.ssh"
 chmod 0700 "$HOME/.ssh"
 ssh-keyscan -p "$PORT" 127.0.0.1 > "$HOME/.ssh/known_hosts" 2>/dev/null
+{
+  printf 'Host *\n'
+  printf '    UserKnownHostsFile %s\n' "$HOME/.ssh/known_hosts"
+} > "$HOME/.ssh/config"
+chmod 0600 "$HOME/.ssh/config"
 
 COMMON_ARGS=(
   --name codex-integration
