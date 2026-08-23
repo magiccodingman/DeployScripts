@@ -1,0 +1,40 @@
+name: Linux Codex Remote
+
+on:
+  pull_request:
+    paths:
+      - 'linux/codex-remote/**'
+      - 'tests/codex-remote/**'
+      - 'docs/linux/codex-remote.md'
+      - '.github/workflows/linux-codex-remote.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'linux/codex-remote/**'
+      - 'tests/codex-remote/**'
+      - 'docs/linux/codex-remote.md'
+      - '.github/workflows/linux-codex-remote.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codex-remote:
+    name: Unit and SSH integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Run unit tests
+        run: bash tests/codex-remote/unit.sh
+
+      - name: Run disposable SSH-host integration
+        run: bash tests/codex-remote/integration.sh
+

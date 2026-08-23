@@ -4,6 +4,31 @@ Reusable deployment and host-provisioning tools.
 
 This repository is organized by platform and capability. Top-level documentation is intentionally an index; each tool owns its detailed usage and recovery documentation under `docs/`.
 
+## Linux
+
+### Codex Remote Host
+
+Creates and maintains a dedicated SSH identity and concrete SSH alias, installs
+the managed public key on a Debian/Ubuntu account, ensures Codex is available in
+the remote login-shell path, and supports device-code authentication with:
+
+- safe, idempotent repair-oriented reruns;
+- isolated managed SSH host files;
+- bounded local and remote configuration backups;
+- read-only `--check` and mutation-free `--dry-run` modes;
+- verified key rotation that keeps the current key until its replacement works.
+
+Quick start:
+
+```bash
+./linux/codex-remote/setup.sh \
+  --name s3-storage-box-germany \
+  --host 203.0.113.10 \
+  --user aadmin
+```
+
+Detailed documentation: [`docs/linux/codex-remote.md`](docs/linux/codex-remote.md)
+
 ## Debian
 
 ### Secure Storage
@@ -64,3 +89,4 @@ Detailed documentation: [`docs/debian/harbor.md`](docs/debian/harbor.md)
 ## Repository conventions
 
 See [`docs/conventions.md`](docs/conventions.md) for layout, naming, idempotency, safety, and documentation rules.
+
