@@ -137,8 +137,9 @@ resolve_configuration() {
   validate_host "$HOST"
   validate_user "$REMOTE_USER"
   validate_port "$PORT"
-  [[ $BACKUP_LIMIT =~ ^[0-9]+$ ]] && ((BACKUP_LIMIT >= 1 && BACKUP_LIMIT <= 100)) ||
+  if [[ ! $BACKUP_LIMIT =~ ^[0-9]+$ ]] || ((BACKUP_LIMIT < 1 || BACKUP_LIMIT > 100)); then
     die "--backup-limit must be between 1 and 100."
+  fi
   [[ $CODEX_INSTALL == ensure || $CODEX_INSTALL == update || $CODEX_INSTALL == skip ]] ||
     die "--codex-install must be ensure, update, or skip."
   [[ $AUTH_MODE == device || $AUTH_MODE == skip ]] || die "--auth must be device or skip."

@@ -185,7 +185,7 @@ EOF
 }
 
 ensure_host_config() {
-  local conflict temporary combined
+  local conflict temporary
   if [[ ! -f $HOST_CONFIG ]]; then
     conflict=$(find_unmanaged_alias || true)
     if [[ -n $conflict && $REPLACE_EXISTING -eq 0 ]]; then

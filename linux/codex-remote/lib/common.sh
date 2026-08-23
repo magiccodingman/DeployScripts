@@ -39,7 +39,9 @@ validate_user() {
 }
 
 validate_port() {
-  [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= 1 && 10#$1 <= 65535)) || die "Invalid SSH port: $1"
+  if [[ ! $1 =~ ^[0-9]+$ ]] || ((10#$1 < 1 || 10#$1 > 65535)); then
+    die "Invalid SSH port: $1"
+  fi
 }
 
 ensure_absolute_path() {
@@ -52,7 +54,7 @@ expand_home_path() {
   local value=$1
   if [[ $value == "~" ]]; then
     printf '%s' "$HOME"
-  elif [[ $value == "~/"* ]]; then
+  elif [[ $value == \~/* ]]; then
     printf '%s/%s' "$HOME" "${value#\~/}"
   else
     printf '%s' "$value"

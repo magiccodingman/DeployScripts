@@ -7,6 +7,8 @@ ssh_base_args() {
 }
 
 remote_ssh() {
+  # Arguments after the host are intentionally interpreted by the remote shell.
+  # shellcheck disable=SC2029
   ssh "${SSH_ARGS[@]}" "$NAME" "$@"
 }
 
@@ -103,6 +105,8 @@ test_key_directly() {
 
 ensure_remote_platform() {
   local platform
+  # Variables in this command are intentionally expanded on the remote host.
+  # shellcheck disable=SC2016
   platform=$(remote_ssh '. /etc/os-release 2>/dev/null || exit 1; printf "%s" "$ID"') ||
     die "Could not identify the remote operating system."
   case "$platform" in
@@ -113,6 +117,8 @@ ensure_remote_platform() {
 
 ensure_remote_packages() {
   local missing
+  # Variables in this command are intentionally expanded on the remote host.
+  # shellcheck disable=SC2016
   missing=$(remote_ssh 'missing=""; for package in curl ca-certificates git; do dpkg-query -W -f="${Status}" "$package" 2>/dev/null | grep -q "ok installed" || missing="$missing $package"; done; printf "%s" "$missing"')
   [[ -n ${missing// /} ]] || { log_ok "Remote prerequisites are installed."; return 0; }
 
@@ -165,6 +171,8 @@ ensure_remote_codex() {
 
 ensure_remote_codex_path() {
   local bin_dir encoded
+  # Variables in this command are intentionally expanded on the remote host.
+  # shellcheck disable=SC2016
   bin_dir=$(remote_ssh 'for candidate in "$HOME/.local/bin/codex" "$HOME/.codex/bin/codex"; do if [ -x "$candidate" ]; then dirname "$candidate"; exit 0; fi; done; exit 1') ||
     die "Codex was installed but its executable could not be located in a supported per-user bin directory."
   encoded=$(printf '%s' "$bin_dir" | base64 | tr -d '\n')
