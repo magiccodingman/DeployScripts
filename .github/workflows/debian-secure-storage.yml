@@ -5,6 +5,7 @@ on:
     paths:
       - 'debian/secure-storage/**'
       - 'tests/secure-storage/**'
+      - 'tests/debian/**'
       - 'tests/bash-syntax.sh'
       - '.github/workflows/debian-secure-storage.yml'
       - '.github/workflows/_debian-tool-integration.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'debian/secure-storage/**'
       - 'tests/secure-storage/**'
+      - 'tests/debian/**'
       - 'tests/bash-syntax.sh'
       - '.github/workflows/debian-secure-storage.yml'
       - '.github/workflows/_debian-tool-integration.yml'
